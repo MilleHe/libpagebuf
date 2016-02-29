@@ -88,6 +88,8 @@ struct pb_mmap_allocator {
 
   uint64_t file_head_offset;
 
+  struct pb_mmap_data data_filler;
+
   struct pb_mmap_data *data_tree;
 
   enum pb_mmap_close_action close_action;
@@ -194,6 +196,20 @@ static struct pb_mmap_allocator *pb_mmap_allocator_create(const char *file_path,
   }
 
   mmap_allocator->file_head_offset = 0;
+
+  mmap_allocator->data_filler.data.data_vec.base = 0;
+  mmap_allocator->data_filler.data.data_vec.len = 0;
+
+  mmap_allocator->data_filler.data.responsibility = pb_data_owned;
+
+  mmap_allocator->data_filler.data.use_count = 1;
+
+  mmap_allocator->data_filler.data.operations = pb_get_mmap_data_operations();
+  mmap_allocator->data_filler.data.allocator = &mmap_allocator->allocator;
+
+  mmap_allocator->data_filler.mmap_allocator = mmap_allocator;
+
+  mmap_allocator->data_filler.file_offset = 0;
 
   mmap_allocator->close_action = close_action;
 
@@ -368,6 +384,17 @@ static struct pb_page *pb_mmap_allocator_page_map_forward(
 
   return page;
 }
+
+/*******************************************************************************
+ */
+/*
+static size_t pb_mmap_allocator_insert(
+    struct pb_mmap_allocator * const mmap_allocator,
+    const struct pb_buffer_iterator *buffer_iterator,
+    struct pb_page * const page) {
+  return 0;
+}
+*/
 
 /*******************************************************************************
  */
@@ -923,6 +950,23 @@ struct pb_mmap_buffer *pb_mmap_buffer_create_with_alloc(const char *file_path,
   mmap_buffer->trivial_buffer.data_revision = 0;
   mmap_buffer->trivial_buffer.data_size = 0;
 
+  if (pb_mmap_allocator_get_data_size(mmap_allocator) > 0) {
+    struct pb_page *page =
+      pb_page_create(
+        &mmap_allocator->data_filler.data, mmap_allocator->struct_allocator);
+    if (!page) {
+      pb_mmap_buffer_destroy(&mmap_buffer->trivial_buffer.buffer);
+
+      return NULL;
+    }
+
+    struct pb_buffer_iterator buffer_iterator;
+    pb_trivial_buffer_get_iterator_end(
+      &mmap_buffer->trivial_buffer.buffer, &buffer_iterator);
+
+    pb_trivial_buffer_insert(
+      &mmap_buffer->trivial_buffer.buffer, &buffer_iterator, 0, page);
+  }
   return mmap_buffer;
 }
 
@@ -1095,6 +1139,22 @@ uint64_t pb_mmap_buffer_trim(struct pb_buffer * const buffer,
 
   return trimmed;
 }
+
+/*******************************************************************************
+ */
+/*
+struct pb_page *pb_mmap_buffer_create_page(struct pb_buffer * const buffer,
+    struct pb_buffer_iterator * const buffer_iterator,
+    bool is_reverse) {
+  return NULL;
+}
+
+struct pb_page *pb_mmap_buffer_create_page_ref(struct pb_buffer * const buffer,
+    struct pb_buffer_iterator * const buffer_iterator,
+    bool is_reverse) {
+  return NULL;
+}
+*/
 
 /*******************************************************************************
  */
