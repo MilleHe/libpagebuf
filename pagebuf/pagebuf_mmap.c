@@ -136,6 +136,68 @@ struct pb_allocator_operations pb_mmap_allocator_operations = {
 static void pb_mmap_allocator_get(struct pb_mmap_allocator *mmap_allocator);
 static void pb_mmap_allocator_put(struct pb_mmap_allocator *mmap_allocator);
 
+/** Operations forwarded from mmap buffer to the specific allocator. */
+static struct pb_mmap_allocator *pb_mmap_allocator_create(const char *file_path,
+                             enum pb_mmap_open_action open_action,
+                             enum pb_mmap_close_action close_action,
+                             const struct pb_allocator *allocator);
+
+static uint64_t pb_mmap_allocator_get_file_size(
+                             struct pb_mmap_allocator * const mmap_allocator);
+static uint64_t pb_mmap_allocator_get_data_size(
+                             struct pb_mmap_allocator * const mmap_allocator);
+
+static struct pb_mmap_data *pb_mmap_allocator_data_create(
+                             struct pb_mmap_allocator * const mmap_allocator,
+                             uint64_t mmap_offset, size_t mmap_len);
+static void pb_mmap_allocator_data_destroy(
+                             struct pb_mmap_allocator * const mmap_allocator,
+                             struct pb_mmap_data * const mmap_data);
+
+static struct pb_page *pb_mmap_allocator_page_map_forward(
+                             struct pb_mmap_allocator * const mmap_allocator,
+                             const struct pb_buffer_iterator *buffer_iterator);
+static struct pb_page *pb_mmap_allocator_page_map_backward(
+                             struct pb_mmap_allocator * const mmap_allocator,
+                             const struct pb_buffer_iterator *buffer_iterator);
+
+static uint64_t pb_mmap_allocator_extend(
+                             struct pb_mmap_allocator * const mmap_allocator,
+                             size_t len);
+static uint64_t pb_mmap_allocator_rewind(
+                             struct pb_mmap_allocator * const mmap_allocator,
+                             size_t len);
+
+static uint64_t pb_mmap_allocator_seek(
+                             struct pb_mmap_allocator * const mmap_allocator,
+                             size_t len);
+static uint64_t pb_mmap_allocator_trim(
+                             struct pb_mmap_allocator * const mmap_allocator,
+                             size_t len);
+
+
+static uint64_t pb_mmap_allocator_write_data(
+                             struct pb_mmap_allocator * const mmap_allocator,
+                             const void *buf, uint64_t len);
+static uint64_t pb_mmap_allocator_write_data_buffer(
+                             struct pb_mmap_allocator * const mmap_allocator,
+                             struct pb_buffer * const src_buffer,
+                             uint64_t len);
+
+
+static void pb_mmap_allocator_clear(
+                             struct pb_mmap_allocator * const mmap_allocator);
+
+
+/** Some operations for interrogating pages of a mmap_allocator. */
+static size_t pb_mmap_allocator_get_page_head_file_offset(
+                             struct pb_mmap_allocator * const mmap_allocator,
+                             const struct pb_buffer_iterator *buffer_iterator);
+
+static size_t pb_mmap_allocator_get_page_tail_file_offset(
+                             struct pb_mmap_allocator * const mmap_allocator,
+                             const struct pb_buffer_iterator *buffer_iterator);
+
 
 
 /*******************************************************************************
@@ -230,7 +292,7 @@ static uint64_t pb_mmap_allocator_get_file_size(
   }
 
 static uint64_t pb_mmap_allocator_get_data_size(
-    struct pb_mmap_allocator *mmap_allocator) {
+    struct pb_mmap_allocator * const mmap_allocator) {
   uint64_t file_size = pb_mmap_allocator_get_file_size(mmap_allocator);
 
   if (file_size < mmap_allocator->file_head_offset) {
@@ -312,12 +374,7 @@ static struct pb_page *pb_mmap_allocator_page_map_forward(
 
   uint64_t file_size = pb_mmap_allocator_get_file_size(mmap_allocator);
   uint64_t file_offset =
-    (mmap_data) ?
-       mmap_data->file_offset +
-         ((ptrdiff_t)pb_page_get_base(page) -
-          (ptrdiff_t)pb_data_get_base(page->data)) +
-         pb_page_get_len(page) :
-       mmap_allocator->file_head_offset;
+    pb_mmap_allocator_get_page_head_file_offset(mmap_allocator, buffer_iterator);
   uint64_t mmap_offset =
     (file_offset / PB_MMAP_ALLOCATOR_BASE_MMAP_SIZE) *
     PB_MMAP_ALLOCATOR_BASE_MMAP_SIZE;
@@ -387,17 +444,6 @@ static struct pb_page *pb_mmap_allocator_page_map_forward(
 
 /*******************************************************************************
  */
-/*
-static size_t pb_mmap_allocator_insert(
-    struct pb_mmap_allocator * const mmap_allocator,
-    const struct pb_buffer_iterator *buffer_iterator,
-    struct pb_page * const page) {
-  return 0;
-}
-*/
-
-/*******************************************************************************
- */
 static struct pb_page *pb_mmap_allocator_page_map_backward(
     struct pb_mmap_allocator * const mmap_allocator,
     const struct pb_buffer_iterator *buffer_iterator) {
@@ -409,11 +455,7 @@ static struct pb_page *pb_mmap_allocator_page_map_backward(
 
   uint64_t file_size = pb_mmap_allocator_get_file_size(mmap_allocator);
   uint64_t file_current_offset =
-    (mmap_data) ?
-       mmap_data->file_offset +
-         ((ptrdiff_t)pb_page_get_base(page) -
-          (ptrdiff_t)pb_data_get_base(page->data)) :
-       file_size;
+    pb_mmap_allocator_get_page_tail_file_offset(mmap_allocator, buffer_iterator);
   uint64_t file_offset;
   uint64_t mmap_offset =
     (file_current_offset / PB_MMAP_ALLOCATOR_BASE_MMAP_SIZE) *
@@ -733,6 +775,45 @@ static void pb_mmap_allocator_put(
 }
 
 
+/*******************************************************************************
+ */
+static size_t pb_mmap_allocator_get_page_head_file_offset(
+    struct pb_mmap_allocator * const mmap_allocator,
+    const struct pb_buffer_iterator *buffer_iterator) {
+  struct pb_page *page = buffer_iterator->page;
+  if (!page)
+    return mmap_allocator->file_head_offset;
+
+  struct pb_mmap_data *mmap_data = (struct pb_mmap_data*)page->data;
+  if (!mmap_data)
+    return mmap_allocator->file_head_offset;
+
+  return
+    mmap_data->file_offset +
+      ((ptrdiff_t)pb_page_get_base(page) -
+       (ptrdiff_t)pb_data_get_base(page->data)) +
+      pb_page_get_len(page);
+}
+
+static size_t pb_mmap_allocator_get_page_tail_file_offset(
+    struct pb_mmap_allocator * const mmap_allocator,
+    const struct pb_buffer_iterator *buffer_iterator) {
+  uint64_t file_size = pb_mmap_allocator_get_file_size(mmap_allocator);
+  struct pb_page *page = buffer_iterator->page;
+  if (!page)
+    return file_size;
+
+  struct pb_mmap_data *mmap_data = (struct pb_mmap_data*)page->data;
+  if (!mmap_data)
+    return file_size;
+
+  return
+    mmap_data->file_offset +
+      ((ptrdiff_t)pb_page_get_base(page) -
+       (ptrdiff_t)pb_data_get_base(page->data));
+}
+
+
 
 
 
@@ -845,6 +926,15 @@ static void pb_mmap_buffer_clear(struct pb_buffer * const buffer);
 static void pb_mmap_buffer_destroy(
                                  struct pb_buffer * const buffer);
 
+
+/** Additional internal functions. */
+static bool pb_mmap_buffer_identify_filler(
+    struct pb_buffer * const buffer,
+    const struct pb_buffer_iterator *buffer_iterator);
+
+static bool pb_mmap_buffer_insert_filler(
+    struct pb_buffer * const buffer,
+    const struct pb_buffer_iterator *buffer_iterator);
 
 
 /*******************************************************************************
@@ -1029,8 +1119,19 @@ bool pb_mmap_buffer_iterator_cmp(struct pb_buffer * const buffer,
 void pb_mmap_buffer_iterator_next(struct pb_buffer * const buffer,
     struct pb_buffer_iterator * const buffer_iterator) {
   pb_trivial_buffer_iterator_next(buffer, buffer_iterator);
-  if (!pb_trivial_buffer_iterator_is_end(buffer, buffer_iterator))
+  if (!pb_mmap_buffer_iterator_is_filler(buffer, buffer_iterator) &&
+      !pb_trivial_buffer_iterator_is_end(buffer, buffer_iterator))
     return;
+
+  if (pb_mmap_buffer_iterator_is_filler(buffer, buffer_iterator)) {
+    struct pb_buffer_iterator prev_buffer_iterator;
+    prev_buffer_iterator.page = buffer_iterator.page;
+
+    pb_trivial_buffer_iterator_prev(buffer, &prev_buffer_iterator);
+
+  } else if (pb_trivial_buffer_iterator_is_end(buffer, buffer_iterator)) {
+
+  }
 
   // reset the iterator to its previous position
   pb_trivial_buffer_iterator_prev(buffer, buffer_iterator);
@@ -1220,6 +1321,35 @@ static void pb_mmap_buffer_destroy(struct pb_buffer * const buffer) {
     mmap_buffer, sizeof(struct pb_mmap_buffer));
 
   pb_mmap_allocator_put(mmap_allocator);
+}
+
+
+/*******************************************************************************
+*/
+static bool pb_mmap_buffer_iterator_is_filler(
+    struct pb_buffer * const buffer,
+    const struct pb_buffer_iterator *buffer_iterator) {
+  struct pb_mmap_allocator *mmap_allocator =
+    (struct pb_mmap_allocator*)buffer->allocator;
+
+  return (buffer_iterator->page->data == &mmap_allocator->data_filler.data);
+}
+
+static bool pb_mmap_buffer_insert_filler(
+    struct pb_buffer * const buffer,
+    const struct pb_buffer_iterator *buffer_iterator) {
+  struct pb_mmap_allocator *mmap_allocator =
+    (struct pb_mmap_allocator*)buffer->allocator;
+
+  struct pb_page *page =
+    pb_page_create(
+      &mmap_allocator->data_filler.data, buffer->allocator);
+  if (!page)
+    return false;
+
+  pb_trivial_buffer_insert(buffer, buffer_iterator, 0, page);
+
+  return true;
 }
 
 
