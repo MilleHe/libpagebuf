@@ -803,6 +803,12 @@ struct pb_buffer_operations {
    */
   void (*get_end_iterator)(struct pb_buffer * const buffer,
                            struct pb_buffer_iterator * const buffer_iterator);
+  /** Finalise an iterator.
+   *
+   * Cleanup any resources associated with the iterator.
+   */
+  void (*put_iterator)(struct pb_buffer * const buffer,
+                       struct pb_buffer_iterator * const buffer_iterator);
 
   /** Indicates whether an iterator is currently pointing to the 'end' of
    *  a buffer or not.
@@ -853,6 +859,13 @@ struct pb_buffer_operations {
   void (*get_end_byte_iterator)(struct pb_buffer * const buffer,
                                 struct pb_buffer_byte_iterator * const
                                   buffer_byte_iterator);
+  /** Finalise a byte iterator.
+   *
+   * Cleanup any resources associated with the byte iterator.
+   */
+  void (*put_byte_iterator)(struct pb_buffer * const buffer,
+                            struct pb_buffer_byte_iterator * const
+                              buffer_byte_iterator);
 
   /** Indicates whether a byte iterator is currently pointing to the 'end' of
    *  a buffer or not.
@@ -1177,6 +1190,8 @@ void pb_buffer_get_iterator(struct pb_buffer * const buffer,
 void pb_buffer_get_end_iterator(
                             struct pb_buffer * const buffer,
                             struct pb_buffer_iterator * const buffer_iterator);
+void pb_buffer_put_iterator(struct pb_buffer * const buffer,
+                            struct pb_buffer_iterator * const buffer_iterator);
 bool pb_buffer_is_end_iterator(
                             struct pb_buffer * const buffer,
                             const struct pb_buffer_iterator *buffer_iterator);
@@ -1195,6 +1210,9 @@ void pb_buffer_get_byte_iterator(
                          struct pb_buffer * const buffer,
                          struct pb_buffer_byte_iterator * const byte_iterator);
 void pb_buffer_get_end_byte_iterator(
+                         struct pb_buffer * const buffer,
+                         struct pb_buffer_byte_iterator * const byte_iterator);
+void pb_buffer_put_byte_iterator(
                          struct pb_buffer * const buffer,
                          struct pb_buffer_byte_iterator * const byte_iterator);
 bool pb_buffer_is_end_byte_iterator(
@@ -1287,6 +1305,9 @@ void pb_buffer_destroy(
  * It defines a classic strategy and operations structure and uses this when
  * the user does not specifiy their own.  However, all permutations of
  * strategy settings are supported internally by the trivial buffer.
+ *
+ * The trivial buffer guarantees that iterator get and put operations will
+ * lead to no memory allocations or frees.
  */
 struct pb_trivial_buffer {
   struct pb_buffer buffer;
@@ -1354,6 +1375,9 @@ void pb_trivial_buffer_get_iterator(
 void pb_trivial_buffer_get_end_iterator(
                             struct pb_buffer * const buffer,
                             struct pb_buffer_iterator * const buffer_iterator);
+void pb_trivial_buffer_put_iterator(
+                            struct pb_buffer * const buffer,
+                            struct pb_buffer_iterator * const buffer_iterator);
 bool pb_trivial_buffer_is_end_iterator(
                             struct pb_buffer * const buffer,
                             const struct pb_buffer_iterator *buffer_iterator);
@@ -1372,6 +1396,9 @@ void pb_trivial_buffer_get_byte_iterator(
                          struct pb_buffer * const buffer,
                          struct pb_buffer_byte_iterator * const byte_iterator);
 void pb_trivial_buffer_get_end_byte_iterator(
+                         struct pb_buffer * const buffer,
+                         struct pb_buffer_byte_iterator * const byte_iterator);
+void pb_trivial_buffer_put_byte_iterator(
                          struct pb_buffer * const buffer,
                          struct pb_buffer_byte_iterator * const byte_iterator);
 bool pb_trivial_buffer_is_end_byte_iterator(
