@@ -975,8 +975,6 @@ void pb_mmap_buffer_get_iterator(struct pb_buffer * const buffer,
   if (!pb_trivial_buffer_is_end_iterator(buffer, buffer_iterator))
     return;
 
-  pb_trivial_buffer_put_iterator(buffer, buffer_iterator);
-
   struct pb_mmap_allocator *mmap_allocator =
     (struct pb_mmap_allocator*)buffer->allocator;
 
