@@ -1624,7 +1624,7 @@ uint64_t pb_trivial_buffer_write_buffer(struct pb_buffer * const buffer,
   struct pb_buffer_iterator buffer_iterator;
   pb_buffer_get_end_iterator(buffer, &buffer_iterator);
 
-  uint64_t written;
+  uint64_t written = 0;
 
   if (!buffer->strategy->clone_on_write &&
       !buffer->strategy->fragment_as_target) {
