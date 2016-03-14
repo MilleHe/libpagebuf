@@ -788,6 +788,13 @@ static void pb_mmap_buffer_get_iterator(
 static void pb_mmap_buffer_get_end_iterator(
                             struct pb_buffer * const buffer,
                             struct pb_buffer_iterator * const buffer_iterator);
+void pb_mmap_buffer_clone_iterator(
+                            struct pb_buffer * const buffer,
+                            struct pb_buffer_iterator * const new_iterator,
+                            const struct pb_buffer_iterator *src_iterator);
+void pb_mmap_buffer_put_iterator(
+                            struct pb_buffer * const buffer,
+                            struct pb_buffer_iterator * const buffer_iterator);
 static bool pb_mmap_buffer_is_end_iterator(
                             struct pb_buffer * const buffer,
                             const struct pb_buffer_iterator *buffer_iterator);
@@ -847,6 +854,8 @@ static struct pb_buffer_operations pb_mmap_buffer_operations = {
 
   .get_iterator = &pb_mmap_buffer_get_iterator,
   .get_end_iterator = &pb_mmap_buffer_get_end_iterator,
+  .clone_iterator = &pb_mmap_buffer_clone_iterator,
+  .put_iterator = &pb_mmap_buffer_put_iterator,
   .is_end_iterator = &pb_mmap_buffer_is_end_iterator,
   .cmp_iterator = &pb_mmap_buffer_cmp_iterator,
   .next_iterator = &pb_mmap_buffer_next_iterator,
@@ -854,6 +863,8 @@ static struct pb_buffer_operations pb_mmap_buffer_operations = {
 
   .get_byte_iterator = &pb_trivial_buffer_get_byte_iterator,
   .get_end_byte_iterator = &pb_trivial_buffer_get_end_byte_iterator,
+  .clone_byte_iterator = &pb_trivial_buffer_clone_byte_iterator,
+  .put_byte_iterator = &pb_trivial_buffer_put_byte_iterator,
   .is_end_byte_iterator = &pb_trivial_buffer_is_end_byte_iterator,
   .cmp_byte_iterator = &pb_trivial_buffer_cmp_byte_iterator,
   .next_byte_iterator = &pb_trivial_buffer_next_byte_iterator,
@@ -964,6 +975,8 @@ void pb_mmap_buffer_get_iterator(struct pb_buffer * const buffer,
   if (!pb_trivial_buffer_is_end_iterator(buffer, buffer_iterator))
     return;
 
+  pb_trivial_buffer_put_iterator(buffer, buffer_iterator);
+
   struct pb_mmap_allocator *mmap_allocator =
     (struct pb_mmap_allocator*)buffer->allocator;
 
@@ -987,6 +1000,19 @@ void pb_mmap_buffer_get_iterator(struct pb_buffer * const buffer,
 void pb_mmap_buffer_get_end_iterator(struct pb_buffer * const buffer,
     struct pb_buffer_iterator * const buffer_iterator) {
   pb_trivial_buffer_get_end_iterator(buffer, buffer_iterator);
+}
+
+void pb_mmap_buffer_clone_iterator(
+    struct pb_buffer * const buffer,
+    struct pb_buffer_iterator * const new_iterator,
+    const struct pb_buffer_iterator *src_iterator) {
+  pb_trivial_buffer_clone_iterator(buffer, new_iterator, src_iterator);
+}
+
+void pb_mmap_buffer_put_iterator(
+    struct pb_buffer * const buffer,
+    struct pb_buffer_iterator * const buffer_iterator) {
+  pb_trivial_buffer_put_iterator(buffer, buffer_iterator);
 }
 
 bool pb_mmap_buffer_is_end_iterator(struct pb_buffer * const buffer,

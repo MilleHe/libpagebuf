@@ -803,6 +803,15 @@ struct pb_buffer_operations {
    */
   void (*get_end_iterator)(struct pb_buffer * const buffer,
                            struct pb_buffer_iterator * const buffer_iterator);
+  /** Clone one iterator into another.  Both iterators must be from the same
+   *  buffer that is supplied as the first argument.
+   *
+   * The source iterator passed to this function must be initialised using
+   * one of the get_*iterator functions above.
+   */
+  void (*clone_iterator)(struct pb_buffer * const buffer,
+                         struct pb_buffer_iterator * const new_iterator,
+                         const struct pb_buffer_iterator *src_iterator);
   /** Finalise an iterator.
    *
    * Cleanup any resources associated with the iterator.
@@ -814,7 +823,7 @@ struct pb_buffer_operations {
    *  a buffer or not.
    *
    * The iterator passed to this function must be initialised using one of the
-   * get_iterator* functions above.
+   * get_*iterator functions above.
    */
   bool (*is_end_iterator)(struct pb_buffer * const buffer,
                           const struct pb_buffer_iterator *buffer_iterator);
@@ -822,7 +831,7 @@ struct pb_buffer_operations {
    *  defined as pointing to the same page in the same buffer.
    *
    * The iterators passed to this function must be initialised using one of the
-   * get_iterator* functions above.
+   * get_*iterator functions above.
    */
   bool (*cmp_iterator)(struct pb_buffer * const buffer,
                        const struct pb_buffer_iterator *lvalue,
@@ -859,6 +868,17 @@ struct pb_buffer_operations {
   void (*get_end_byte_iterator)(struct pb_buffer * const buffer,
                                 struct pb_buffer_byte_iterator * const
                                   buffer_byte_iterator);
+  /** Clone one iterator into another.  Both iterators must be from the same
+   *  buffer that is supplied as the first argument.
+   *
+   * The source iterator passed to this function must be initialised using
+   * one of the get_*byte_iterator functions above.
+   */
+  void (*clone_byte_iterator)(struct pb_buffer * const buffer,
+                              struct pb_buffer_byte_iterator * const
+                                new_iterator,
+                              const struct pb_buffer_byte_iterator *
+                                src_iterator);
   /** Finalise a byte iterator.
    *
    * Cleanup any resources associated with the byte iterator.
@@ -871,7 +891,7 @@ struct pb_buffer_operations {
    *  a buffer or not.
    *
    * The iterator passed to this function must be initialised using one of the
-   * get_byte_iterator* functions above.
+   * get_*byte_iterator functions above.
    */
   bool (*is_end_byte_iterator)(struct pb_buffer * const buffer,
                                struct pb_buffer_byte_iterator * const
@@ -881,7 +901,7 @@ struct pb_buffer_operations {
    *  same buffer.
    *
    * The iterators passed to this function must be initialised using one of the
-   * get_byte_iterator* functions above.
+   * get_*byte_iterator functions above.
    */
   bool (*cmp_byte_iterator)(struct pb_buffer * const buffer,
                             const struct pb_buffer_byte_iterator *lvalue,
@@ -1190,6 +1210,10 @@ void pb_buffer_get_iterator(struct pb_buffer * const buffer,
 void pb_buffer_get_end_iterator(
                             struct pb_buffer * const buffer,
                             struct pb_buffer_iterator * const buffer_iterator);
+void pb_buffer_clone_iterator(
+                            struct pb_buffer * const buffer,
+                            struct pb_buffer_iterator * const new_iterator,
+                            const struct pb_buffer_iterator *src_iterator);
 void pb_buffer_put_iterator(struct pb_buffer * const buffer,
                             struct pb_buffer_iterator * const buffer_iterator);
 bool pb_buffer_is_end_iterator(
@@ -1212,6 +1236,10 @@ void pb_buffer_get_byte_iterator(
 void pb_buffer_get_end_byte_iterator(
                          struct pb_buffer * const buffer,
                          struct pb_buffer_byte_iterator * const byte_iterator);
+void pb_buffer_clone_byte_iterator(
+                         struct pb_buffer * const buffer,
+                         struct pb_buffer_byte_iterator * const new_iterator,
+                         const struct pb_buffer_byte_iterator *src_iterator);
 void pb_buffer_put_byte_iterator(
                          struct pb_buffer * const buffer,
                          struct pb_buffer_byte_iterator * const byte_iterator);
@@ -1375,13 +1403,18 @@ void pb_trivial_buffer_get_iterator(
 void pb_trivial_buffer_get_end_iterator(
                             struct pb_buffer * const buffer,
                             struct pb_buffer_iterator * const buffer_iterator);
+void pb_trivial_buffer_clone_iterator(
+                            struct pb_buffer * const buffer,
+                            struct pb_buffer_iterator * const new_iterator,
+                            const struct pb_buffer_iterator *src_iterator);
 void pb_trivial_buffer_put_iterator(
                             struct pb_buffer * const buffer,
                             struct pb_buffer_iterator * const buffer_iterator);
 bool pb_trivial_buffer_is_end_iterator(
                             struct pb_buffer * const buffer,
                             const struct pb_buffer_iterator *buffer_iterator);
-bool pb_trivial_buffer_cmp_iterator(struct pb_buffer * const buffer,
+bool pb_trivial_buffer_cmp_iterator(
+                            struct pb_buffer * const buffer,
                             const struct pb_buffer_iterator *lvalue,
                             const struct pb_buffer_iterator *rvalue);
 void pb_trivial_buffer_next_iterator(
@@ -1398,13 +1431,18 @@ void pb_trivial_buffer_get_byte_iterator(
 void pb_trivial_buffer_get_end_byte_iterator(
                          struct pb_buffer * const buffer,
                          struct pb_buffer_byte_iterator * const byte_iterator);
+void pb_trivial_buffer_clone_byte_iterator(
+                         struct pb_buffer * const buffer,
+                         struct pb_buffer_byte_iterator * const new_iterator,
+                         const struct pb_buffer_byte_iterator *src_iterator);
 void pb_trivial_buffer_put_byte_iterator(
                          struct pb_buffer * const buffer,
                          struct pb_buffer_byte_iterator * const byte_iterator);
 bool pb_trivial_buffer_is_end_byte_iterator(
                          struct pb_buffer * const buffer,
                          struct pb_buffer_byte_iterator * const byte_iterator);
-bool pb_trivial_buffer_cmp_byte_iterator(struct pb_buffer * const buffer,
+bool pb_trivial_buffer_cmp_byte_iterator(
+                         struct pb_buffer * const buffer,
                          const struct pb_buffer_byte_iterator *lvalue,
                          const struct pb_buffer_byte_iterator *rvalue);
 void pb_trivial_buffer_next_byte_iterator(
@@ -1599,7 +1637,7 @@ struct pb_data_reader_operations {
                   void * const buf, uint64_t len);
 
   /** Clone the state of the data reader into a new instance. */
-  struct pb_data_reader *(*clone)(struct pb_data_reader * const data_reader);
+  struct pb_data_reader *(*clone)(const struct pb_data_reader *data_reader);
 
   /** Reset the data reader so that subsequent reads start at the beginning of
    *  the buffer. */
@@ -1626,7 +1664,7 @@ uint64_t pb_data_reader_consume(
                              void * const buf, uint64_t len);
 
 struct pb_data_reader *pb_data_reader_clone(
-                             struct pb_data_reader * const data_reader);
+                             const struct pb_data_reader *data_reader);
 
 void pb_data_reader_reset(struct pb_data_reader * const data_reader);
 void pb_data_reader_destroy(
@@ -1674,7 +1712,7 @@ uint64_t pb_trivial_data_reader_consume(
                                      void * const buf, uint64_t len);
 
 struct pb_data_reader *pb_trivial_data_reader_clone(
-                             struct pb_data_reader * const data_reader);
+                                  const struct pb_data_reader *data_reader);
 
 void pb_trivial_data_reader_reset(struct pb_data_reader * const data_reader);
 void pb_trivial_data_reader_destroy(
@@ -1792,7 +1830,7 @@ struct pb_line_reader_operations {
   bool (*is_end)(struct pb_line_reader * const line_reader);
 
   /** Clone the state of the line reader into a new instance. */
-  struct pb_line_reader *(*clone)(struct pb_line_reader * const line_reader);
+  struct pb_line_reader *(*clone)(const struct pb_line_reader *line_reader);
 
   /** Reset the current line discovery progress information, including
    *  positions of discovered lines. */
@@ -1830,7 +1868,7 @@ void pb_line_reader_terminate_line_check_cr(
 size_t pb_line_reader_seek_line(struct pb_line_reader * const line_reader);
 
 struct pb_line_reader *pb_line_reader_clone(
-                                     struct pb_line_reader * const line_reader);
+                                const struct pb_line_reader *line_reader);
 
 void pb_line_reader_reset(struct pb_line_reader * const line_reader);
 void pb_line_reader_destroy(
@@ -1892,7 +1930,7 @@ void pb_trivial_line_reader_terminate_line_check_cr(
                                     struct pb_line_reader * const line_reader);
 
 struct pb_line_reader *pb_trivial_line_reader_clone(
-                                    struct pb_line_reader * const line_reader);
+                                    const struct pb_line_reader *line_reader);
 
 void pb_trivial_line_reader_reset(struct pb_line_reader * const line_reader);
 void pb_trivial_line_reader_destroy(

@@ -73,6 +73,9 @@ class buffer {
         }
 
         ~iterator() {
+          if (buffer_)
+            pb_buffer_put_iterator(buffer_, &buffer_iterator_);
+
           buffer_iterator_ = {};
           buffer_ = 0;
         }
@@ -89,8 +92,12 @@ class buffer {
         }
 
         iterator& operator=(const iterator& rvalue) {
-          buffer_iterator_ = rvalue.buffer_iterator_;
           buffer_ = rvalue.buffer_;
+
+          pb_buffer_clone_iterator(
+            buffer_,
+            &buffer_iterator_,
+            &rvalue.buffer_iterator_);
 
           return *this;
         }
@@ -175,6 +182,10 @@ class buffer {
         }
 
         ~byte_iterator() {
+          if (buffer_)
+            pb_buffer_put_byte_iterator(buffer_, &byte_iterator_);
+
+          byte_iterator_ = {};
           buffer_ = 0;
         }
 
@@ -190,8 +201,12 @@ class buffer {
         }
 
         byte_iterator& operator=(const byte_iterator& rvalue) {
-          byte_iterator_ = rvalue.byte_iterator_;
           buffer_ = rvalue.buffer_;
+
+          pb_buffer_clone_byte_iterator(
+            buffer_,
+            &byte_iterator_,
+            &rvalue.byte_iterator_);
 
           return *this;
         }
