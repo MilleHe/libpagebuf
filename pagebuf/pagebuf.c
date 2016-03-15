@@ -1212,8 +1212,6 @@ uint64_t pb_trivial_buffer_trim(struct pb_buffer * const buffer, uint64_t len) {
     trimmed += trim_len;
 
     pb_trivial_buffer_decrement_data_size(buffer, trim_len);
-
-    pb_buffer_prev_iterator(buffer, &buffer_iterator);
   }
 
   pb_buffer_put_iterator(buffer, &buffer_iterator);
