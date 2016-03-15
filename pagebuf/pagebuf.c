@@ -759,7 +759,7 @@ void pb_trivial_buffer_clone_iterator(
 
 void pb_trivial_buffer_put_iterator(struct pb_buffer * const buffer,
     struct pb_buffer_iterator * const buffer_iterator) {
-  buffer_iterator->data_vec = NULL;
+  pb_trivial_buffer_get_end_iterator(buffer, buffer_iterator);
 }
 
 bool pb_trivial_buffer_is_end_iterator(struct pb_buffer * const buffer,
@@ -795,7 +795,7 @@ void pb_trivial_buffer_prev_iterator(struct pb_buffer * const buffer,
 static char pb_trivial_buffer_byte_iterator_null_char = '\0';
 
 /*******************************************************************************
- *  */
+ */
 void pb_trivial_buffer_get_byte_iterator(struct pb_buffer * const buffer,
     struct pb_buffer_byte_iterator * const byte_iterator) {
   pb_buffer_put_iterator(buffer, &byte_iterator->buffer_iterator);
@@ -911,7 +911,7 @@ void pb_trivial_buffer_prev_byte_iterator(struct pb_buffer * const buffer,
 
 
 /*******************************************************************************
- *  */
+ */
 struct pb_page *pb_trivial_buffer_page_create(
     struct pb_buffer * const buffer,
     size_t len) {

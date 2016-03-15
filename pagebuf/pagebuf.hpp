@@ -177,8 +177,9 @@ class buffer {
         }
 
         byte_iterator(const byte_iterator& rvalue) :
-            byte_iterator_(rvalue.byte_iterator_),
-            buffer_(rvalue.buffer_) {
+            byte_iterator_({}),
+            buffer_(0) {
+          *this = rvalue;
         }
 
         ~byte_iterator() {
