@@ -764,9 +764,7 @@ void pb_trivial_buffer_put_iterator(struct pb_buffer * const buffer,
 
 bool pb_trivial_buffer_is_end_iterator(struct pb_buffer * const buffer,
     const struct pb_buffer_iterator *buffer_iterator) {
-  struct pb_trivial_buffer *trivial_buffer = (struct pb_trivial_buffer*)buffer;
-
-  return (buffer_iterator->data_vec == &trivial_buffer->page_end.data_vec);
+  return (buffer_iterator->data_vec->base == NULL);
 }
 
 bool pb_trivial_buffer_cmp_iterator(struct pb_buffer * const buffer,
@@ -798,7 +796,6 @@ static char pb_trivial_buffer_byte_iterator_null_char = '\0';
  */
 void pb_trivial_buffer_get_byte_iterator(struct pb_buffer * const buffer,
     struct pb_buffer_byte_iterator * const byte_iterator) {
-  pb_buffer_put_iterator(buffer, &byte_iterator->buffer_iterator);
   pb_buffer_get_iterator(buffer, &byte_iterator->buffer_iterator);
 
   byte_iterator->page_offset = 0;
@@ -817,7 +814,6 @@ void pb_trivial_buffer_get_byte_iterator(struct pb_buffer * const buffer,
 
 void pb_trivial_buffer_get_end_byte_iterator(struct pb_buffer * const buffer,
     struct pb_buffer_byte_iterator * const byte_iterator) {
-  pb_buffer_put_iterator(buffer, &byte_iterator->buffer_iterator);
   pb_buffer_get_end_iterator(buffer, &byte_iterator->buffer_iterator);
 
   byte_iterator->page_offset = 0;
