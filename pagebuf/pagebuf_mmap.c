@@ -303,7 +303,6 @@ static struct pb_page *pb_mmap_allocator_page_map_forward(
     (file_offset / PB_MMAP_ALLOCATOR_BASE_MMAP_SIZE) *
     PB_MMAP_ALLOCATOR_BASE_MMAP_SIZE;
   size_t mmap_len;
-  size_t len;
 
   if (file_offset == file_size)
     return NULL;
@@ -347,8 +346,6 @@ static struct pb_page *pb_mmap_allocator_page_map_forward(
     PB_HASH_ADD_UINT64(mmap_allocator->data_tree, file_offset, mmap_data);
   }
 
-  len = (mmap_offset + mmap_len) - file_offset;
-
   page = pb_page_create(&mmap_data->data, mmap_allocator->struct_allocator);
   if (!page) {
     pb_data_put(&mmap_data->data);
@@ -359,7 +356,7 @@ static struct pb_page *pb_mmap_allocator_page_map_forward(
   // adjust the page data vec
   page->data_vec.base =
     pb_data_get_base_at(&mmap_data->data, (file_offset - mmap_offset));
-  page->data_vec.len = len;
+  page->data_vec.len = (mmap_offset + mmap_len) - file_offset;
 
   pb_data_put(&mmap_data->data);
 
@@ -386,7 +383,6 @@ static struct pb_page *pb_mmap_allocator_page_map_backward(
     (file_current_offset / PB_MMAP_ALLOCATOR_BASE_MMAP_SIZE) *
     PB_MMAP_ALLOCATOR_BASE_MMAP_SIZE;
   size_t mmap_len;
-  size_t len;
 
   if (file_current_offset <= mmap_allocator->file_head_offset)
     return NULL;
@@ -436,8 +432,6 @@ static struct pb_page *pb_mmap_allocator_page_map_backward(
 
     PB_HASH_ADD_UINT64(mmap_allocator->data_tree, file_offset, mmap_data);
   }
-
-  len = file_current_offset - file_offset;
 
   page = pb_page_create(&mmap_data->data, mmap_allocator->struct_allocator);
   if (!page) {
