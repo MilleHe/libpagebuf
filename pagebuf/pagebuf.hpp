@@ -1,5 +1,7 @@
 /*******************************************************************************
  *  Copyright 2015, 2016 Nick Jones <nick.fa.jones@gmail.com>
+ *  Copyright 2016 Network Box Corporation Limited
+ *      Jeff He <jeff.he@network-box.com>
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -42,6 +44,13 @@ class buffer {
     class iterator {
       public:
         friend class buffer;
+
+      public:
+        typedef std::bidirectional_iterator_tag iterator_category;
+        typedef struct pb_data_vec value_type;
+        typedef std::ptrdiff_t difference_type;
+        typedef struct pb_data_vec* pointer;
+        typedef struct pb_data_vec& reference;
 
       public:
         iterator() :
@@ -93,7 +102,6 @@ class buffer {
 
         iterator& operator=(const iterator& rvalue) {
           buffer_ = rvalue.buffer_;
-
           pb_buffer_clone_iterator(
             buffer_,
             &buffer_iterator_,
@@ -103,12 +111,17 @@ class buffer {
         }
 
       public:
-        bool operator==(const iterator& rvalue) {
+        bool operator==(const iterator& rvalue) const {
           return
             ((buffer_ == rvalue.buffer_) &&
              (pb_buffer_cmp_iterator(
                 buffer_, &buffer_iterator_, &rvalue.buffer_iterator_)));
         }
+
+        bool operator!=(const iterator& rvalue) const {
+          return !(*this == rvalue);
+        }
+
 
       public:
         iterator& operator++() {
@@ -137,8 +150,12 @@ class buffer {
         }
 
       public:
-        const struct pb_data_vec& operator*() {
+        struct pb_data_vec& operator*() const {
           return *buffer_iterator_.data_vec;
+        }
+
+        struct pb_data_vec* operator->() const {
+          return buffer_iterator_.data_vec;
         }
 
       private:
@@ -151,6 +168,13 @@ class buffer {
     class byte_iterator {
       public:
         friend class buffer;
+
+      public:
+        typedef std::bidirectional_iterator_tag iterator_category;
+        typedef char value_type;
+        typedef std::ptrdiff_t difference_type;
+        typedef char* pointer;
+        typedef char& reference;
 
       public:
         byte_iterator() :
@@ -213,11 +237,15 @@ class buffer {
         }
 
       public:
-        bool operator==(const byte_iterator& rvalue) {
+        bool operator==(const byte_iterator& rvalue) const {
           return
             ((buffer_ == rvalue.buffer_) &&
              (pb_buffer_cmp_byte_iterator(
                 buffer_, &byte_iterator_, &rvalue.byte_iterator_)));
+        }
+
+        bool operator!=(const byte_iterator& rvalue) const {
+          return !(*this == rvalue);
         }
 
       public:
@@ -327,11 +355,11 @@ class buffer {
     }
 
   public:
-    uint64_t get_data_revision() {
+    uint64_t get_data_revision() const {
       return pb_buffer_get_data_revision(buffer_);
     }
 
-    uint64_t get_data_size() {
+    uint64_t get_data_size() const {
       return pb_buffer_get_data_size(buffer_);
     }
 
@@ -357,20 +385,20 @@ class buffer {
     }
 
   public:
-    iterator begin() {
+    iterator begin() const {
       return iterator(buffer_, false);
     }
 
-    iterator end() {
+    iterator end() const {
       return iterator(buffer_, true);
     }
 
   public:
-    byte_iterator byte_begin() {
+    byte_iterator byte_begin() const {
       return byte_iterator(buffer_, false);
     }
 
-    byte_iterator byte_end() {
+    byte_iterator byte_end() const {
       return byte_iterator(buffer_, true);
     }
 
@@ -423,7 +451,7 @@ class buffer {
     }
 
   public:
-    uint64_t read(void * const buf, uint64_t len) {
+    uint64_t read(void * const buf, uint64_t len) const {
       return pb_buffer_read_data(buffer_, buf, len);
     }
 
