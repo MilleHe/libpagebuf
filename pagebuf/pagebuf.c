@@ -761,12 +761,16 @@ void pb_trivial_buffer_put_iterator(struct pb_buffer * const buffer,
 
 bool pb_trivial_buffer_is_end_iterator(struct pb_buffer * const buffer,
     const struct pb_buffer_iterator *buffer_iterator) {
-  return (buffer_iterator->data_vec->base == NULL);
+  return
+    ((buffer_iterator->data_vec == NULL) ||
+     (buffer_iterator->data_vec->base == NULL));
 }
 
 bool pb_trivial_buffer_cmp_iterator(struct pb_buffer * const buffer,
     const struct pb_buffer_iterator *lvalue,
     const struct pb_buffer_iterator *rvalue) {
+  if ((lvalue->data_vec == NULL) && (rvalue->data_vec == NULL))
+    return true;
 
   return (lvalue->data_vec == rvalue->data_vec);
 }

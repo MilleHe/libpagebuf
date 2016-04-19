@@ -287,17 +287,16 @@ static void pb_mmap_allocator_data_destroy(
  */
 static struct pb_page *pb_mmap_allocator_page_map_forward(
     struct pb_mmap_allocator * const mmap_allocator,
-    const struct pb_buffer_iterator *buffer_iterator) {
-  struct pb_page *page = (struct pb_page*)buffer_iterator->data_vec;
-  struct pb_mmap_data *mmap_data = (struct pb_mmap_data*)page->data;
+    struct pb_page *prev_page) {
+  struct pb_mmap_data *mmap_data = (struct pb_mmap_data*)prev_page->data;
 
   uint64_t file_size = pb_mmap_allocator_get_file_size(mmap_allocator);
   uint64_t file_offset =
     (mmap_data) ?
        mmap_data->file_offset +
-         ((ptrdiff_t)pb_page_get_base(page) -
-          (ptrdiff_t)pb_data_get_base(page->data)) +
-         pb_page_get_len(page) :
+         ((ptrdiff_t)pb_page_get_base(prev_page) -
+          (ptrdiff_t)pb_data_get_base(prev_page->data)) +
+         pb_page_get_len(prev_page) :
        mmap_allocator->file_head_offset;
   uint64_t mmap_offset =
     (file_offset / PB_MMAP_ALLOCATOR_BASE_MMAP_SIZE) *
@@ -305,7 +304,7 @@ static struct pb_page *pb_mmap_allocator_page_map_forward(
   size_t mmap_len;
 
   if (file_offset == file_size)
-    return NULL;
+    return prev_page->next;
 
   PB_HASH_FIND_UINT64(mmap_allocator->data_tree, &mmap_offset, mmap_data);
   if (mmap_data) {
@@ -323,7 +322,7 @@ static struct pb_page *pb_mmap_allocator_page_map_forward(
       struct pb_mmap_data *new_mmap_data =
         pb_mmap_allocator_data_create(mmap_allocator, mmap_offset, mmap_len);
       if (!new_mmap_data)
-        return NULL;
+        return prev_page->next;
 
       PB_HASH_DEL(mmap_allocator->data_tree, mmap_data);
       mmap_data->obsolete = true;
@@ -341,16 +340,17 @@ static struct pb_page *pb_mmap_allocator_page_map_forward(
     mmap_data =
       pb_mmap_allocator_data_create(mmap_allocator, mmap_offset, mmap_len);
     if (!mmap_data)
-      return NULL;
+      return prev_page->next;
 
     PB_HASH_ADD_UINT64(mmap_allocator->data_tree, file_offset, mmap_data);
   }
 
-  page = pb_page_create(&mmap_data->data, mmap_allocator->struct_allocator);
+  struct pb_page *page =
+    pb_page_create(&mmap_data->data, mmap_allocator->struct_allocator);
   if (!page) {
     pb_data_put(&mmap_data->data);
 
-    return NULL;
+    return prev_page->next;
   }
 
   // adjust the page data vec
@@ -360,6 +360,12 @@ static struct pb_page *pb_mmap_allocator_page_map_forward(
 
   pb_data_put(&mmap_data->data);
 
+  page->prev = prev_page;
+  page->next = prev_page->next;
+  
+  prev_page->next = page;
+  prev_page->next->prev = page;
+
   return page;
 }
 
@@ -367,16 +373,15 @@ static struct pb_page *pb_mmap_allocator_page_map_forward(
  */
 static struct pb_page *pb_mmap_allocator_page_map_backward(
     struct pb_mmap_allocator * const mmap_allocator,
-    const struct pb_buffer_iterator *buffer_iterator) {
-  struct pb_page *page = (struct pb_page*)buffer_iterator->data_vec;
-  struct pb_mmap_data *mmap_data = (struct pb_mmap_data*)page->data;
+    struct pb_page *next_page) {
+  struct pb_mmap_data *mmap_data = (struct pb_mmap_data*)next_page->data;
 
   uint64_t file_size = pb_mmap_allocator_get_file_size(mmap_allocator);
   uint64_t file_current_offset =
     (mmap_data) ?
        mmap_data->file_offset +
-         ((ptrdiff_t)pb_page_get_base(page) -
-          (ptrdiff_t)pb_data_get_base(page->data)) :
+         ((ptrdiff_t)pb_page_get_base(next_page) -
+          (ptrdiff_t)pb_data_get_base(next_page->data)) :
        file_size;
   uint64_t file_offset;
   uint64_t mmap_offset =
@@ -385,7 +390,7 @@ static struct pb_page *pb_mmap_allocator_page_map_backward(
   size_t mmap_len;
 
   if (file_current_offset <= mmap_allocator->file_head_offset)
-    return NULL;
+    return next_page->prev;
 
   if (file_current_offset == mmap_offset)
     mmap_offset -= PB_MMAP_ALLOCATOR_BASE_MMAP_SIZE;
@@ -410,7 +415,7 @@ static struct pb_page *pb_mmap_allocator_page_map_backward(
       struct pb_mmap_data *new_mmap_data =
         pb_mmap_allocator_data_create(mmap_allocator, mmap_offset, mmap_len);
       if (!new_mmap_data)
-        return NULL;
+        return next_page->prev;
 
       PB_HASH_DEL(mmap_allocator->data_tree, mmap_data);
       mmap_data->obsolete = true;
@@ -428,12 +433,13 @@ static struct pb_page *pb_mmap_allocator_page_map_backward(
     mmap_data =
       pb_mmap_allocator_data_create(mmap_allocator, mmap_offset, mmap_len);
     if (!mmap_data)
-      return NULL;
+      return next_page->prev;
 
     PB_HASH_ADD_UINT64(mmap_allocator->data_tree, file_offset, mmap_data);
   }
 
-  page = pb_page_create(&mmap_data->data, mmap_allocator->struct_allocator);
+  struct pb_page *page =
+    pb_page_create(&mmap_data->data, mmap_allocator->struct_allocator);
   if (!page) {
     pb_data_put(&mmap_data->data);
 
@@ -446,6 +452,12 @@ static struct pb_page *pb_mmap_allocator_page_map_backward(
   page->data_vec.len = file_current_offset - file_offset;
 
   pb_data_put(&mmap_data->data);
+
+  page->next = next_page;
+  page->prev = next_page->prev;
+
+  next_page->prev = page;
+  next_page->prev->next = page;
 
   return page;
 }
@@ -960,33 +972,36 @@ static uint64_t pb_mmap_buffer_get_data_size(struct pb_buffer * const buffer) {
  */
 void pb_mmap_buffer_get_iterator(struct pb_buffer * const buffer,
     struct pb_buffer_iterator * const buffer_iterator) {
-  pb_trivial_buffer_get_iterator(buffer, buffer_iterator);
-  if (!pb_trivial_buffer_is_end_iterator(buffer, buffer_iterator))
+  pb_mmap_buffer_get_end_iterator(buffer, buffer_iterator);
+  if (!buffer_iterator->data_vec)
     return;
 
   struct pb_mmap_allocator *mmap_allocator =
     (struct pb_mmap_allocator*)buffer->allocator;
 
+  struct pb_page *prev_page = (struct pb_page*)buffer_iterator->data_vec;
   struct pb_page *page =
-    pb_mmap_allocator_page_map_forward(mmap_allocator, buffer_iterator);
-  if (!page) {
-    pb_trivial_buffer_get_end_iterator(buffer, buffer_iterator);
+    pb_mmap_allocator_page_map_forward(mmap_allocator, prev_page);
 
-    return;
-  }
-
-  if (pb_trivial_buffer_insert(buffer, buffer_iterator, 0, page) == 0) {
-    pb_trivial_buffer_get_end_iterator(buffer, buffer_iterator);
-
-    return;
-  }
-
-  pb_trivial_buffer_get_iterator(buffer, buffer_iterator);
+  buffer_iterator->data_vec = &page->data_vec;
 }
 
 void pb_mmap_buffer_get_end_iterator(struct pb_buffer * const buffer,
     struct pb_buffer_iterator * const buffer_iterator) {
-  pb_trivial_buffer_get_end_iterator(buffer, buffer_iterator);
+  struct pb_page *page_end =
+    pb_allocator_alloc(
+      buffer->allocator,
+      pb_alloc_type_struct, sizeof(struct pb_page));
+  if (!page_end) {
+    buffer_iterator->data_vec = NULL;
+
+    return;
+  }
+
+  page_end->next = page_end;
+  page_end->prev = page_end;
+
+  buffer_iterator->data_vec = &page_end->data_vec;
 }
 
 void pb_mmap_buffer_clone_iterator(
@@ -999,7 +1014,12 @@ void pb_mmap_buffer_clone_iterator(
 void pb_mmap_buffer_put_iterator(
     struct pb_buffer * const buffer,
     struct pb_buffer_iterator * const buffer_iterator) {
-  pb_trivial_buffer_put_iterator(buffer, buffer_iterator);
+  struct pb_page *page = (struct pb_page*)buffer_iterator->data_vec;
+  buffer_iterator->data_vec = NULL;
+
+  pb_allocator_free(
+    buffer->allocator,
+    pb_alloc_type_struct, page, sizeof(struct pb_page));
 }
 
 bool pb_mmap_buffer_is_end_iterator(struct pb_buffer * const buffer,
@@ -1015,70 +1035,46 @@ bool pb_mmap_buffer_cmp_iterator(struct pb_buffer * const buffer,
 
 void pb_mmap_buffer_next_iterator(struct pb_buffer * const buffer,
     struct pb_buffer_iterator * const buffer_iterator) {
-  pb_trivial_buffer_next_iterator(buffer, buffer_iterator);
-  if (!pb_trivial_buffer_is_end_iterator(buffer, buffer_iterator))
+  if (!buffer_iterator->data_vec)
     return;
 
-  // reset the iterator to its previous position
-  pb_trivial_buffer_prev_iterator(buffer, buffer_iterator);
+  struct pb_page *prev_page = (struct pb_page*)buffer_iterator->data_vec;
+
+  if (prev_page->next->data) {
+    buffer_iterator->data_vec = &prev_page->next->data_vec;
+
+    return;
+  }
 
   struct pb_mmap_allocator *mmap_allocator =
     (struct pb_mmap_allocator*)buffer->allocator;
 
   struct pb_page *page =
-    pb_mmap_allocator_page_map_forward(mmap_allocator, buffer_iterator);
-  if (!page) {
-    pb_trivial_buffer_get_end_iterator(buffer, buffer_iterator);
+    pb_mmap_allocator_page_map_forward(mmap_allocator, prev_page);
 
-    return;
-  }
-
-  struct pb_buffer_iterator end_buffer_iterator;
-  pb_trivial_buffer_get_end_iterator(buffer, &end_buffer_iterator);
-
-  // insert the new page at the end
-  if (pb_trivial_buffer_insert(buffer, &end_buffer_iterator, 0, page) == 0) {
-    pb_trivial_buffer_get_end_iterator(buffer, buffer_iterator);
-
-    return;
-  }
-
-  // now advance the iterator
-  pb_trivial_buffer_next_iterator(buffer, buffer_iterator);
+  buffer_iterator->data_vec = &page->data_vec;
 }
 
 void pb_mmap_buffer_prev_iterator(struct pb_buffer * const buffer,
     struct pb_buffer_iterator * const buffer_iterator) {
-  pb_trivial_buffer_prev_iterator(buffer, buffer_iterator);
-  if (!pb_trivial_buffer_is_end_iterator(buffer, buffer_iterator))
+  if (!buffer_iterator->data_vec)
     return;
 
-  // reset the iterator to its previous position
-  pb_trivial_buffer_next_iterator(buffer, buffer_iterator);
+  struct pb_page *next_page = (struct pb_page*)buffer_iterator->data_vec;
+
+  if (next_page->prev->data) {
+    buffer_iterator->data_vec = &next_page->prev->data_vec;
+
+    return;
+  }
 
   struct pb_mmap_allocator *mmap_allocator =
     (struct pb_mmap_allocator*)buffer->allocator;
 
   struct pb_page *page =
-    pb_mmap_allocator_page_map_backward(mmap_allocator, buffer_iterator);
-  if (!page) {
-    pb_trivial_buffer_get_end_iterator(buffer, buffer_iterator);
+    pb_mmap_allocator_page_map_backward(mmap_allocator, next_page);
 
-    return;
-  }
-
-  struct pb_buffer_iterator head_buffer_iterator;
-  pb_trivial_buffer_get_iterator(buffer, &head_buffer_iterator);
-
-  // insert the new page at the head
-  if (pb_trivial_buffer_insert(buffer, &head_buffer_iterator, 0, page) == 0) {
-    pb_trivial_buffer_get_end_iterator(buffer, buffer_iterator);
-
-    return;
-  }
-
-  // now rewind the iterator
-  pb_trivial_buffer_prev_iterator(buffer, buffer_iterator);
+  buffer_iterator->data_vec = &page->data_vec;
 }
 
 /*******************************************************************************
